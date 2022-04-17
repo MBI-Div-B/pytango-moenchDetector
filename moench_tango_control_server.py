@@ -182,6 +182,11 @@ class MoenchDetectorControl(Device):
         doc="path of all moench sls executables",
         default_value="/opt/slsDetectorPackage/build/bin/",
     )
+    CLEAR_STARTUP = device_property(
+        dtype="bool",
+        doc="kill old process instances before startup",
+        default_value=True,
+    )
 
     exposure = attribute(
         label="exposure",
@@ -493,6 +498,7 @@ class MoenchDetectorControl(Device):
             EXECUTABLES_PATH=self.EXECUTABLES_PATH,
             ROOT_USERNAME=self.ROOT_USERNAME,
             ROOT_PASSWORD=self.ROOT_PASSWORD,
+            CLEAR_STARTUP=self.CLEAR_STARTUP,
         )
         while not computer_setup.is_pc_ready() and self.attempts_counter < MAX_ATTEMPTS:
             time.sleep(0.5)

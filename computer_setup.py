@@ -19,8 +19,11 @@ def init_pc(
     EXECUTABLES_PATH="/opt/slsDetectorPackage/build/bin/",
     ROOT_USERNAME="dummy_user",
     ROOT_PASSWORD="dummy_password",
+    CLEAR_STARTUP=False,
 ):
     start_10g_interface(ROOT_USERNAME, ROOT_PASSWORD)
+    if CLEAR_STARTUP:
+        kill_all_pc_processes()
     if virtual:
         CONFIG_PATH = CONFIG_PATH_VIRTUAL  # for virtual detector
         subprocess.Popen(
