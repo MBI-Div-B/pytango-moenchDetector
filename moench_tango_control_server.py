@@ -794,8 +794,11 @@ class MoenchDetectorControl(Device):
             )
 
     def _block_acquire(self):
+        self.set_state(DevState.MOVING)
         tiff_fullpath_current = self.read_tiff_fullpath_next()
         filewriteEnabled = self.read_filewrite()
+        self.write_tiff_fullpath_last(tiff_fullpath_current)
+        self.set_state(DevState.RUNNING)
         self.moench_device.startReceiver()
         self.info_stream("start receiver")
         self.moench_device.startDetector()
@@ -807,29 +810,35 @@ class MoenchDetectorControl(Device):
         So if there is no delay after startDetector() and self.get_state() check it's very probable that
         detector will be still in ON mode (even not started to acquire.)
         """
-        self.write_tiff_fullpath_last(tiff_fullpath_current)
-        if filewriteEnabled:
-            self.write_fileindex(self.read_fileindex() + 1)
         time.sleep(0.5)
         while self.read_detector_status() != DevState.ON:
             time.sleep(0.1)
         self.moench_device.stopReceiver()
         self.info_stream("stop receiver")
+        time.sleep(0.3) # seems like detector is not really ON (ready for new commands, need a delay)
+        if filewriteEnabled:
+            self.write_fileindex(self.read_fileindex() + 1)
+        # camera has completed the acquisition, need to return capture
+        self._pending_and_update_file(tiff_fullpath_current)
+        self.set_state(DevState.ON)
+       
+
 
     async def _async_acquire(self, loop):
         await loop.run_in_executor(None, self._block_acquire)
-        loop.run_in_executor(None, self._pending_file)
-        # update sum_image_last here
 
-    def _pending_file(self):
+    def _pending_and_update_file(self, file_path):
+        self.info_stream("pending file %s" % file_path)
         c = 0
-        MAX_ATTEMPTS = 15
+        MAX_ATTEMPTS = 20
         isFileReady = False
         while not isFileReady and (c < MAX_ATTEMPTS):
-            isFileReady = os.path.isfile(self.read_tiff_fullpath_last())
-            time.sleep(0.5)
+            isFileReady = os.path.isfile(file_path)
+            time.sleep(0.1)
+            self.info_stream(f"isfileready {isFileReady} and c = {c}")
+            c+=1
         if isFileReady:
-            self._last_image = imread(self.read_tiff_fullpath_last())
+            self._last_image = imread(file_path)
             self.push_change_event(
                 "sum_image_last", self.read_sum_image_last(), 400, 400
             )
@@ -851,6 +860,7 @@ class MoenchDetectorControl(Device):
     @command
     def stop_acquire(self):
         self.moench_device.stop()
+        self.set_state(DevState.ON)
 
 
 if __name__ == "__main__":
