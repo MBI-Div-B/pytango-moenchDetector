@@ -23,7 +23,7 @@ def init_pc(
 ):
     start_10g_interface(ROOT_USERNAME, ROOT_PASSWORD)
     if CLEAR_STARTUP:
-        kill_all_pc_processes()
+        kill_all_pc_processes(ROOT_USERNAME, ROOT_PASSWORD)
     if virtual:
         CONFIG_PATH = CONFIG_PATH_VIRTUAL  # for virtual detector
         subprocess.Popen(
