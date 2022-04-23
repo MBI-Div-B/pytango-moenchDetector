@@ -521,7 +521,7 @@ class MoenchDetectorControl(Device):
         # slsdet.runStatus.IDLE, ERROR, WAITING, RUN_FINISHED, TRANSMITTING, RUNNING, STOPPED
         if self.moench_device.status in (
             runStatus.IDLE,
-            runStatus.WAITING,
+            runStatus.WAITING,  # FIXME: Possibly write in waiting is not available
             runStatus.STOPPED,
         ):
             return True
@@ -794,15 +794,18 @@ class MoenchDetectorControl(Device):
             )
 
     def _block_acquire(self):
+        self.info_stream("Entering _block_acquire")
         self.set_state(DevState.MOVING)
+        self.info_stream("Saving current path")
         tiff_fullpath_current = self.read_tiff_fullpath_next()
+        self.info_stream("Saving filewrite")
         filewriteEnabled = self.read_filewrite()
+        self.info_stream("Writing current path to lastpath")
         self.write_tiff_fullpath_last(tiff_fullpath_current)
-        self.set_state(DevState.RUNNING)
+        self.info_stream("Starting receiver")
         self.moench_device.startReceiver()
-        self.info_stream("start receiver")
-        self.moench_device.startDetector()
         self.info_stream("start detector")
+        self.moench_device.startDetector()
         # in case detector is stopped we want to leave this section earlier
         # time.sleep(exptime * frames)
         """
@@ -811,34 +814,39 @@ class MoenchDetectorControl(Device):
         detector will be still in ON mode (even not started to acquire.)
         """
         time.sleep(0.5)
+        self.info_stream("Checking detector status")
         while self.read_detector_status() != DevState.ON:
             time.sleep(0.1)
+        self.info_stream("Stoping receiver")
         self.moench_device.stopReceiver()
-        self.info_stream("stop receiver")
-        time.sleep(0.3) # seems like detector is not really ON (ready for new commands, need a delay)
+        # seems like detector is not really ON (ready for new commands, need a delay)
+        time.sleep(0.3)
         if filewriteEnabled:
+            self.info_stream("Incrementing fileindex")
             self.write_fileindex(self.read_fileindex() + 1)
         # camera has completed the acquisition, need to return capture
+        self.info_stream("Pending file")
         self._pending_and_update_file(tiff_fullpath_current)
+        self.info_stream("Leaving _block_acquire")
         self.set_state(DevState.ON)
-       
-
 
     async def _async_acquire(self, loop):
         await loop.run_in_executor(None, self._block_acquire)
 
     def _pending_and_update_file(self, file_path):
-        self.info_stream("pending file %s" % file_path)
+        self.info_stream("Pending file on the path: %s" % file_path)
         c = 0
         MAX_ATTEMPTS = 20
         isFileReady = False
         while not isFileReady and (c < MAX_ATTEMPTS):
             isFileReady = os.path.isfile(file_path)
             time.sleep(0.1)
-            self.info_stream(f"isfileready {isFileReady} and c = {c}")
-            c+=1
+            self.info_stream(f"isFileReady = {isFileReady}; c = {c}")
+            c += 1
         if isFileReady:
+            self.info_stream("Updating _last_image")
             self._last_image = imread(file_path)
+            self.info_stream("Pushing event")
             self.push_change_event(
                 "sum_image_last", self.read_sum_image_last(), 400, 400
             )
@@ -859,6 +867,7 @@ class MoenchDetectorControl(Device):
 
     @command
     def stop_acquire(self):
+        self.info_stream("Stopping acquire")
         self.moench_device.stop()
         self.set_state(DevState.ON)
 
